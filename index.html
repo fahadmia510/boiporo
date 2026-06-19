@@ -21,7 +21,7 @@
             color: #2c3e50;
         }
         
-        /* Admin Panel Styling (শুরুতে এটি হাইড বা লুকানো থাকবে) */
+        /* Admin Panel Styling */
         .admin-panel {
             display: none; 
             background: #ffffff;
@@ -39,12 +39,13 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        .form-group input {
+        .form-group input, .form-group select {
             width: 100%;
             padding: 10px;
             box-sizing: border-box;
             border: 1px solid #ccc;
             border-radius: 4px;
+            font-size: 14px;
         }
         .btn-submit {
             background-color: #27ae60;
@@ -55,6 +56,7 @@
             border-radius: 4px;
             cursor: pointer;
             width: 100%;
+            margin-top: 10px;
         }
         .btn-submit:hover {
             background-color: #219653;
@@ -96,9 +98,18 @@
             color: #2980b9;
         }
         .book-card p {
-            margin: 0 0 15px 0;
+            margin: 0 0 5px 0;
             color: #7f8c8d;
             font-size: 14px;
+        }
+        .file-type-badge {
+            display: inline-block;
+            font-size: 11px;
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            font-weight: bold;
         }
         .btn-download {
             display: inline-block;
@@ -108,12 +119,12 @@
             padding: 8px 15px;
             border-radius: 4px;
             font-size: 14px;
+            width: 80%;
         }
         .btn-download:hover {
             background-color: #2980b9;
         }
         
-        /* ডিলিট বাটন শুরুতে হাইড থাকবে, অ্যাডমিন লগইন করলে জাভাস্ক্রিপ্ট দিয়ে দেখানো হবে */
         .btn-delete {
             display: none;
             position: absolute;
@@ -134,7 +145,6 @@
             grid-column: 1 / -1;
         }
         
-        /* অ্যাডমিন মোড অ্যাক্টিভ হলে ডিলিট বাটন দেখানোর ক্লাস */
         .admin-mode .btn-delete {
             display: block;
         }
@@ -146,33 +156,45 @@
     <h1>Book Management Web App</h1>
     <p style="text-align: center; font-size: 12px; color: #aaa;">[Admin Panel: Ctrl + Shift + A]</p>
 
-    <!-- ১. অ্যাডমিন প্যানেল (লুকানো থাকবে) -->
     <div class="admin-panel" id="adminPanel">
         <button class="btn-logout" onclick="logoutAdmin()">Logout Admin</button>
-        <h2>Admin Panel (Add New Book)</h2>
+        <h2>Admin Panel (Add New Book/File)</h2>
         <form id="bookForm">
             <div class="form-group">
-                <label for="bookTitle">বইয়ের নাম (Book Title):</label>
+                <label for="bookTitle">বই বা ফাইলের নাম:</label>
                 <input type="text" id="bookTitle" placeholder="উদা: Javascript Basics" required>
             </div>
             <div class="form-group">
-                <label for="bookAuthor">লেখকের নাম (Author):</label>
+                <label for="bookAuthor">লেখকের নাম / বিবরণ:</label>
                 <input type="text" id="bookAuthor" placeholder="উদা: হুমায়ূন আহমেদ" required>
             </div>
+            
             <div class="form-group">
-                <label for="fileUrl">ফাইল বা ড্রাইভ লিংক (File/Drive Link):</label>
-                <input type="url" id="fileUrl" placeholder="উদা: https://drive.google.com/..." required>
+                <label for="uploadType">যুক্ত করার মাধ্যম সিলেক্ট করুন:</label>
+                <select id="uploadType" onchange="toggleInputFields()">
+                    <option value="link">Direct URL / Link</option>
+                    <option value="file">Upload File (PDF, Image, etc.)</option>
+                </select>
             </div>
-            <button type="submit" class="btn-submit">Add Book to List</button>
+
+            <div class="form-group" id="linkField">
+                <label for="fileUrl">ফাইল বা ড্রাইভ লিংক (URL):</label>
+                <input type="url" id="fileUrl" placeholder="https://drive.google.com/...">
+            </div>
+
+            <div class="form-group" id="fileField" style="display: none;">
+                <label for="fileInput">কম্পিউটার/মোবাইল থেকে ফাইল সিলেক্ট করুন:</label>
+                <input type="file" id="fileInput">
+            </div>
+
+            <button type="submit" class="btn-submit">Add to List</button>
         </form>
     </div>
 
-    <!-- ২. ইউজার প্যানেল (সবাই দেখতে পাবে) -->
     <div class="user-panel">
-        <h2>User Panel (Available Book List)</h2>
-        <div class="book-list id-container" id="bookContainer">
-            <!-- বইয়ের লিস্ট এখানে লোড হবে -->
-        </div>
+        <h2> (Available Book List)</h2>
+        <div class="book-list" id="bookContainer">
+            </div>
     </div>
 </div>
 
@@ -180,9 +202,25 @@
     const bookForm = document.getElementById('bookForm');
     const bookContainer = document.getElementById('bookContainer');
     const adminPanel = document.getElementById('adminPanel');
+    const uploadType = document.getElementById('uploadType');
+    const linkField = document.getElementById('linkField');
+    const fileField = document.getElementById('fileField');
 
     let books = JSON.parse(localStorage.getItem('myBooks')) || [];
-    let isAdmin = false; // শুরুতে কেউ অ্যাডমিন নয়
+    let isAdmin = false;
+
+    // ড্রপডাউন চেঞ্জ অনুযায়ী ইনপুট ফিল্ড পরিবর্তন করার ফাংশন
+    function toggleInputFields() {
+        if (uploadType.value === 'link') {
+            linkField.style.display = 'block';
+            fileField.style.display = 'none';
+            document.getElementById('fileInput').value = ''; // ক্লিয়ার ফাইল
+        } else {
+            linkField.style.display = 'none';
+            fileField.style.display = 'block';
+            document.getElementById('fileUrl').value = ''; // ক্লিয়ার লিংক
+        }
+    }
 
     // বইয়ের লিস্ট দেখানোর ফাংশন
     function displayBooks() {
@@ -195,33 +233,37 @@
 
         books.forEach((book, index) => {
             const bookCard = document.createElement('div');
-            // যদি অ্যাডমিন লগইন থাকে তবে 'admin-mode' ক্লাস যোগ হবে (যা ডিলিট বাটন দেখাবে)
             bookCard.className = `book-card ${isAdmin ? 'admin-mode' : ''}`;
+            
+            // ফাইলের টাইপ অনুযায়ী ব্যাজ নির্ধারণ
+            const typeBadge = book.type === 'file' ? '📁 Local File' : '🔗 Web Link';
+
+            // ডাউনলোড লিংক তৈরি (ফাইল হলে ডিরেক্ট সোর্স ডাউনলোড হবে)
+            const downloadAttribute = book.type === 'file' ? `download="${book.title}"` : '';
+
             bookCard.innerHTML = `
                 <button class="btn-delete" onclick="deleteBook(${index})">X</button>
                 <h3>${book.title}</h3>
                 <p>লেখক: ${book.author}</p>
-                <a href="${book.url}" target="_blank" class="btn-download">View / Download</a>
+                <span class="file-type-badge">${typeBadge}</span><br>
+                <a href="${book.url}" ${downloadAttribute} target="_blank" class="btn-download">View / Download</a>
             `;
             bookContainer.appendChild(bookCard);
         });
     }
 
-    // ১. কিবোর্ড শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
+    // শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
     window.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-            e.preventDefault(); // ব্রাউজারের ডিফল্ট শর্টকাট বন্ধ করা
-            
-            // আইডি ইনপুট নেওয়া
+            e.preventDefault();
             const adminId = prompt("Enter Admin ID:");
             if (adminId === "236533") {
-                // পাসওয়ার্ড ইনপুট নেওয়া
                 const adminPass = prompt("Enter Admin Password:");
                 if (adminPass === "fahad236533") {
                     alert("অ্যাডমিন লগইন সফল হয়েছে!");
                     isAdmin = true;
-                    adminPanel.style.display = 'block'; // অ্যাডমিন ফর্ম দেখানো
-                    displayBooks(); // লিস্ট রিফ্রেশ করে ডিলিট বাটন চালু করা
+                    adminPanel.style.display = 'block';
+                    displayBooks();
                 } else {
                     alert("ভুল পাসওয়ার্ড!");
                 }
@@ -231,39 +273,67 @@
         }
     });
 
-    // নতুন বই অ্যাড করার ফর্ম সাবমিট
+    // ফর্ম সাবমিট এবং ডেটা প্রসেসিং
     bookForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        
         const title = document.getElementById('bookTitle').value;
         const author = document.getElementById('bookAuthor').value;
-        const url = document.getElementById('fileUrl').value;
+        const type = uploadType.value;
 
-        const newBook = { title, author, url };
-        books.push(newBook);
-        localStorage.setItem('myBooks', JSON.stringify(books));
-
-        bookForm.reset();
-        displayBooks();
+        if (type === 'link') {
+            const url = document.getElementById('fileUrl').value;
+            if(!url) return alert("দয়া করে লিংকটি প্রদান করুন।");
+            
+            saveBook({ title, author, type, url });
+        } else {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) return alert("দয়া করে একটি ফাইল সিলেক্ট করুন।");
+            
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            // ফাইলটিকে Base64 টেক্সটে রূপান্তর করা
+            reader.onload = function(event) {
+                const url = event.target.result; // এটিই ফাইলের ডেটা ইউআরএল
+                saveBook({ title, author, type, url });
+            };
+            reader.readAsDataURL(file);
+        }
     });
 
-    // বই ডিলিট করার ফাংশন
+    // ডেটা সেভ করার কমন ফাংশন
+    function saveBook(bookObj) {
+        try {
+            books.push(bookObj);
+            localStorage.setItem('myBooks', JSON.stringify(books));
+            bookForm.reset();
+            toggleInputFields(); // ফিল্ড রিসেট
+            displayBooks();
+        } catch (error) {
+            // LocalStorage এর মেমোরি লিমিট (সাধারণত 5MB) পার হলে সতর্কবার্তা দেবে
+            alert("ফাইলটি অতিরিক্ত বড় হওয়ার কারণে সেভ করা যাচ্ছে না! দয়া করে ড্রাইভ লিংক অপশন ব্যবহার করুন।");
+            books.pop();
+        }
+    }
+
+    // বই ডিলিট করা
     function deleteBook(index) {
-        if(confirm("আপনি কি এই বইটি তালিকা থেকে বাদ দিতে চান?")) {
+        if(confirm("আপনি কি এটি তালিকা থেকে বাদ দিতে চান?")) {
             books.splice(index, 1);
             localStorage.setItem('myBooks', JSON.stringify(books));
             displayBooks();
         }
     }
 
-    // অ্যাডমিন লগআউট করার ফাংশন
+    // অ্যাডমিন লগআউট
     function logoutAdmin() {
         isAdmin = false;
-        adminPanel.style.display = 'none'; // ফর্ম হাইড করা
-        displayBooks(); // ডিলিট বাটন হাইড করার জন্য রিফ্রেশ
+        adminPanel.style.display = 'none';
+        displayBooks();
         alert("অ্যাডমিন লগআউট করা হয়েছে।");
     }
 
-    // পেজ লোড হলে বই দেখানো
     displayBooks();
 </script>
 
