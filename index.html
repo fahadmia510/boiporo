@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Management Web App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        
+        /* Admin Panel Styling (শুরুতে এটি হাইড বা লুকানো থাকবে) */
+        .admin-panel {
+            display: none; 
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border: 2px dashed #27ae60;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .btn-submit {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-submit:hover {
+            background-color: #219653;
+        }
+        .btn-logout {
+            background-color: #7f8c8d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+        }
+
+        /* User Panel Styling */
+        .user-panel {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .book-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .book-card {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            position: relative;
+        }
+        .book-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #2980b9;
+        }
+        .book-card p {
+            margin: 0 0 15px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .btn-download {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .btn-download:hover {
+            background-color: #2980b9;
+        }
+        
+        /* ডিলিট বাটন শুরুতে হাইড থাকবে, অ্যাডমিন লগইন করলে জাভাস্ক্রিপ্ট দিয়ে দেখানো হবে */
+        .btn-delete {
+            display: none;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .no-books {
+            text-align: center;
+            color: #95a5a6;
+            grid-column: 1 / -1;
+        }
+        
+        /* অ্যাডমিন মোড অ্যাক্টিভ হলে ডিলিট বাটন দেখানোর ক্লাস */
+        .admin-mode .btn-delete {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Book Management Web App</h1>
+    <p style="text-align: center; font-size: 12px; color: #aaa;">[Admin Panel: Ctrl + Shift + A]</p>
+
+    <!-- ১. অ্যাডমিন প্যানেল (লুকানো থাকবে) -->
+    <div class="admin-panel" id="adminPanel">
+        <button class="btn-logout" onclick="logoutAdmin()">Logout Admin</button>
+        <h2>Admin Panel (Add New Book)</h2>
+        <form id="bookForm">
+            <div class="form-group">
+                <label for="bookTitle">বইয়ের নাম (Book Title):</label>
+                <input type="text" id="bookTitle" placeholder="উদা: Javascript Basics" required>
+            </div>
+            <div class="form-group">
+                <label for="bookAuthor">লেখকের নাম (Author):</label>
+                <input type="text" id="bookAuthor" placeholder="উদা: হুমায়ূন আহমেদ" required>
+            </div>
+            <div class="form-group">
+                <label for="fileUrl">ফাইল বা ড্রাইভ লিংক (File/Drive Link):</label>
+                <input type="url" id="fileUrl" placeholder="উদা: https://drive.google.com/..." required>
+            </div>
+            <button type="submit" class="btn-submit">Add Book to List</button>
+        </form>
+    </div>
+
+    <!-- ২. ইউজার প্যানেল (সবাই দেখতে পাবে) -->
+    <div class="user-panel">
+        <h2>User Panel (Available Book List)</h2>
+        <div class="book-list id-container" id="bookContainer">
+            <!-- বইয়ের লিস্ট এখানে লোড হবে -->
+        </div>
+    </div>
+</div>
+
+<script>
+    const bookForm = document.getElementById('bookForm');
+    const bookContainer = document.getElementById('bookContainer');
+    const adminPanel = document.getElementById('adminPanel');
+
+    let books = JSON.parse(localStorage.getItem('myBooks')) || [];
+    let isAdmin = false; // শুরুতে কেউ অ্যাডমিন নয়
+
+    // বইয়ের লিস্ট দেখানোর ফাংশন
+    function displayBooks() {
+        bookContainer.innerHTML = ''; 
+
+        if (books.length === 0) {
+            bookContainer.innerHTML = '<p class="no-books">কোনো বই বা ফাইল যুক্ত করা হয়নি।</p>';
+            return;
+        }
+
+        books.forEach((book, index) => {
+            const bookCard = document.createElement('div');
+            // যদি অ্যাডমিন লগইন থাকে তবে 'admin-mode' ক্লাস যোগ হবে (যা ডিলিট বাটন দেখাবে)
+            bookCard.className = `book-card ${isAdmin ? 'admin-mode' : ''}`;
+            bookCard.innerHTML = `
+                <button class="btn-delete" onclick="deleteBook(${index})">X</button>
+                <h3>${book.title}</h3>
+                <p>লেখক: ${book.author}</p>
+                <a href="${book.url}" target="_blank" class="btn-download">View / Download</a>
+            `;
+            bookContainer.appendChild(bookCard);
+        });
+    }
+
+    // ১. কিবোর্ড শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
+    window.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+            e.preventDefault(); // ব্রাউজারের ডিফল্ট শর্টকাট বন্ধ করা
+            
+            // আইডি ইনপুট নেওয়া
+            const adminId = prompt("Enter Admin ID:");
+            if (adminId === "236533") {
+                // পাসওয়ার্ড ইনপুট নেওয়া
+                const adminPass = prompt("Enter Admin Password:");
+                if (adminPass === "fahad236533") {
+                    alert("অ্যাডমিন লগইন সফল হয়েছে!");
+                    isAdmin = true;
+                    adminPanel.style.display = 'block'; // অ্যাডমিন ফর্ম দেখানো
+                    displayBooks(); // লিস্ট রিফ্রেশ করে ডিলিট বাটন চালু করা
+                } else {
+                    alert("ভুল পাসওয়ার্ড!");
+                }
+            } else if (adminId !== null) {
+                alert("ভুল অ্যাডমিন আইডি!");
+            }
+        }
+    });
+
+    // নতুন বই অ্যাড করার ফর্ম সাবমিট
+    bookForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const title = document.getElementById('bookTitle').value;
+        const author = document.getElementById('bookAuthor').value;
+        const url = document.getElementById('fileUrl').value;
+
+        const newBook = { title, author, url };
+        books.push(newBook);
+        localStorage.setItem('myBooks', JSON.stringify(books));
+
+        bookForm.reset();
+        displayBooks();
+    });
+
+    // বই ডিলিট করার ফাংশন
+    function deleteBook(index) {
+        if(confirm("আপনি কি এই বইটি তালিকা থেকে বাদ দিতে চান?")) {
+            books.splice(index, 1);
+            localStorage.setItem('myBooks', JSON.stringify(books));
+            displayBooks();
+        }
+    }
+
+    // অ্যাডমিন লগআউট করার ফাংশন
+    function logoutAdmin() {
+        isAdmin = false;
+        adminPanel.style.display = 'none'; // ফর্ম হাইড করা
+        displayBooks(); // ডিলিট বাটন হাইড করার জন্য রিফ্রেশ
+        alert("অ্যাডমিন লগআউট করা হয়েছে।");
+    }
+
+    // পেজ লোড হলে বই দেখানো
+    displayBooks();
+</script>
+
+</body>
+</html>
