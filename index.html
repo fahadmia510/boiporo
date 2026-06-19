@@ -154,7 +154,6 @@
 
 <div class="container">
     <h1>Book Management Web App</h1>
-    <p style="text-align: center; font-size: 12px; color: #aaa;">[Admin Panel: Ctrl + Shift + A]</p>
 
     <div class="admin-panel" id="adminPanel">
         <button class="btn-logout" onclick="logoutAdmin()">Logout Admin</button>
@@ -192,7 +191,7 @@
     </div>
 
     <div class="user-panel">
-        <h2> (Available Book List)</h2>
+        <h2>Available Book List</h2>
         <div class="book-list" id="bookContainer">
             </div>
     </div>
@@ -252,7 +251,7 @@
         });
     }
 
-    // শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
+    // হিডেন শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
     window.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
             e.preventDefault();
@@ -311,7 +310,6 @@
             toggleInputFields(); // ফিল্ড রিসেট
             displayBooks();
         } catch (error) {
-            // LocalStorage এর মেমোরি লিমিট (সাধারণত 5MB) পার হলে সতর্কবার্তা দেবে
             alert("ফাইলটি অতিরিক্ত বড় হওয়ার কারণে সেভ করা যাচ্ছে না! দয়া করে ড্রাইভ লিংক অপশন ব্যবহার করুন।");
             books.pop();
         }
