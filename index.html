@@ -113,8 +113,22 @@
             background: #e2e8f0;
             padding: 2px 8px;
             border-radius: 12px;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             font-weight: bold;
+        }
+        .view-count-badge {
+            display: none;
+            font-size: 12px;
+            background: #fff3cd;
+            color: #856404;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-weight: bold;
+            border: 1px solid #ffeeba;
+        }
+        .admin-mode .view-count-badge {
+            display: inline-block;
         }
         .btn-view {
             display: inline-block;
@@ -155,7 +169,7 @@
             display: block;
         }
 
-        /* Read-Only Viewer Modal (পপআপ উইন্ডো) */
+        /* Read-Only Viewer Modal */
         .viewer-modal {
             display: none;
             position: fixed;
@@ -257,8 +271,7 @@
 
     <div class="user-panel">
         <h2>Available Book List</h2>
-        <div class="book-list" id="bookContainer">
-            </div>
+        <div class="book-list" id="bookContainer"></div>
     </div>
 </div>
 
@@ -268,8 +281,7 @@
             <h3 id="viewerTitle">Book Viewer</h3>
             <button class="btn-close-viewer" onclick="closeBook()">Close</button>
         </div>
-        <div class="viewer-body" id="viewerBody" oncontextmenu="return false;">
-            </div>
+        <div class="viewer-body" id="viewerBody" oncontextmenu="return false;"></div>
     </div>
 </div>
 
@@ -284,17 +296,35 @@
     const viewerBody = document.getElementById('viewerBody');
     const viewerTitle = document.getElementById('viewerTitle');
 
-    let books = JSON.parse(localStorage.getItem('myBooks')) || [];
+    let books = [];
     let isAdmin = false;
+    let db;
 
-    // সিকিউরিটি গার্ড: রাইট ক্লিক বন্ধ করা
+    // ১. IndexedDB ডেটাবেস সেটআপ (বড় ফাইল মেমরি লিমিট সমস্যার সমাধান)
+    const request = indexedDB.open("SecureBookStorageDB", 1);
+    
+    request.onupgradeneeded = function(e) {
+        db = e.target.result;
+        if (!db.objectStoreNames.contains("books")) {
+            db.createObjectStore("books", { keyPath: "id", autoIncrement: true });
+        }
+    };
+
+    request.onsuccess = function(e) {
+        db = e.target.result;
+        loadBooks();
+    };
+
+    request.onerror = function() {
+        alert("সিস্টেমের ডেটাবেস লোড করা সম্ভব হচ্ছে না।");
+    };
+
+    // সিকিউরিটি গার্ড
     document.addEventListener('contextmenu', event => event.preventDefault());
-
-    // সিকিউরিটি গার্ড: কিবোর্ডের শর্টকাট (Save, Print) বন্ধ করা
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && (e.key === 's' || e.key === 'p' || e.key === 'S' || e.key === 'P')) {
             e.preventDefault();
-            alert("সংরক্ষণ বা প্রিন্ট করা নিষেধ।");
+            alert("সংরক্ষণ বা প্রিন্ট করা সম্পূর্ণ নিষিদ্ধ।");
         }
     });
 
@@ -310,6 +340,18 @@
         }
     }
 
+    // ডেটাবেস থেকে সকল বই নিয়ে আসা
+    function loadBooks() {
+        const transaction = db.transaction(["books"], "readonly");
+        const store = transaction.objectStore("books");
+        const getAllRequest = store.getAll();
+
+        getAllRequest.onsuccess = function() {
+            books = getAllRequest.result;
+            displayBooks();
+        };
+    }
+
     function displayBooks() {
         bookContainer.innerHTML = ''; 
 
@@ -318,56 +360,67 @@
             return;
         }
 
-        books.forEach((book, index) => {
+        books.forEach((book) => {
             const bookCard = document.createElement('div');
             bookCard.className = `book-card ${isAdmin ? 'admin-mode' : ''}`;
             
             const typeBadge = book.type === 'file' ? '📁 Local File' : '🔗 Web Link';
+            const views = book.views || 0; // ভিউ কাউন্ট ডিফাইন না থাকলে ০ দেখাবে
 
-            // ডাউনলোড অপশন ছাড়া ভিউ বাটন তৈরি করা হয়েছে
             bookCard.innerHTML = `
-                <button class="btn-delete" onclick="deleteBook(${index})">X</button>
+                <button class="btn-delete" onclick="deleteBook(${book.id})">X</button>
                 <h3>${book.title}</h3>
                 <p>লেখক: ${book.author}</p>
                 <span class="file-type-badge">${typeBadge}</span><br>
-                <button onclick="openBook(${index})" class="btn-view">Read / View Book</button>
+                <div class="view-count-badge">👀 মোট ভিউ: ${views} বার</div><br>
+                <button onclick="openBook(${book.id})" class="btn-view">Read / View Book</button>
             `;
             bookContainer.appendChild(bookCard);
         });
     }
 
-    // সুরক্ষিতভাবে বই পড়ার পপআপ ওপেন করার ফাংশন
-    function openBook(index) {
-        const book = books[index];
-        viewerTitle.innerText = book.title + " - Read Only Mode";
-        viewerBody.innerHTML = '';
+    // বই ওপেন করার সাথে সাথে ভিউ হিস্টোরি ১ বৃদ্ধি পাবে
+    function openBook(id) {
+        const transaction = db.transaction(["books"], "readwrite");
+        const store = transaction.objectStore("books");
+        const getRequest = store.get(id);
 
-        if(book.url.startsWith('data:image')) {
-            // যদি আপলোড করা ফাইল কোনো ছবি বা পেজ ইমেজ হয়
-            viewerBody.innerHTML = `<img src="${book.url}" class="viewer-image" oncontextmenu="return false;" draggable="false">`;
-        } else if(book.url.startsWith('data:application/pdf') || book.type === 'link') {
-            // পিডিএফ ফাইল বা সরাসরি ড্রাইভ লিংক হলে Toolbar বা ডাউনলোড অপশন হাইড করে লোড করার চেষ্টা করা
-            let secureUrl = book.url;
-            if(book.type === 'link' && secureUrl.includes('drive.google.com')) {
-                // গুগল ড্রাইভ হলে প্রিভিউ মোড ফোর্স করা
-                secureUrl = secureUrl.replace('/view', '/preview').replace('/edit', '/preview');
+        getRequest.onsuccess = function() {
+            const book = getRequest.result;
+            
+            // ভিউ সংখ্যা আপডেট করা হচ্ছে
+            book.views = (book.views || 0) + 1;
+            store.put(book);
+
+            // পপআপ ভিউয়ারে কন্টেন্ট দেখানো
+            viewerTitle.innerText = book.title + " - Read Only Mode";
+            viewerBody.innerHTML = '';
+
+            if(book.url.startsWith('data:image')) {
+                viewerBody.innerHTML = `<img src="${book.url}" class="viewer-image" oncontextmenu="return false;" draggable="false">`;
+            } else if(book.url.startsWith('data:application/pdf') || book.type === 'link') {
+                let secureUrl = book.url;
+                if(book.type === 'link' && secureUrl.includes('drive.google.com')) {
+                    secureUrl = secureUrl.replace('/view', '/preview').replace('/edit', '/preview');
+                }
+                viewerBody.innerHTML = `<iframe src="${secureUrl}#toolbar=0&navpanes=0&scrollbar=0" width="100%" height="100%"></iframe>`;
+            } else {
+                viewerBody.innerHTML = `<iframe src="${book.url}" width="100%" height="100%"></iframe>`;
             }
-            // #toolbar=0 দিয়ে ড্রাইভ বা পিডিএফের ডিফল্ট ডাউনলোড বাটন হাইড করার চেষ্টা করা হয়
-            viewerBody.innerHTML = `<iframe src="${secureUrl}#toolbar=0&navpanes=0&scrollbar=0" width="100%" height="100%" allow="autoplay"></iframe>`;
-        } else {
-            viewerBody.innerHTML = `<iframe src="${book.url}" width="100%" height="100%"></iframe>`;
-        }
 
-        viewerModal.style.display = 'block';
+            viewerModal.style.display = 'block';
+            
+            // ব্যাকগ্রাউন্ডের ডাটা রিয়েলটাইমে আপডেট করার জন্য
+            loadBooks();
+        };
     }
 
-    // ভিউয়ার ক্লোজ করার ফাংশন
     function closeBook() {
         viewerBody.innerHTML = '';
         viewerModal.style.display = 'none';
     }
 
-    // অ্যাডমিন শর্টকাট (Ctrl + Shift + A)
+    // অ্যাডমিন হিডেন শর্টকাট (Ctrl + Shift + A)
     window.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
             e.preventDefault();
@@ -398,7 +451,7 @@
         if (type === 'link') {
             const url = document.getElementById('fileUrl').value;
             if(!url) return alert("দয়া করে লিংকটি প্রদান করুন।");
-            saveBook({ title, author, type, url });
+            saveBook({ title, author, type, url, views: 0 });
         } else {
             const fileInput = document.getElementById('fileInput');
             if (fileInput.files.length === 0) return alert("দয়া করে একটি ফাইল সিলেক্ট করুন।");
@@ -408,30 +461,37 @@
             
             reader.onload = function(event) {
                 const url = event.target.result;
-                saveBook({ title, author, type, url });
+                saveBook({ title, author, type, url, views: 0 });
             };
             reader.readAsDataURL(file);
         }
     });
 
     function saveBook(bookObj) {
-        try {
-            books.push(bookObj);
-            localStorage.setItem('myBooks', JSON.stringify(books));
+        const transaction = db.transaction(["books"], "readwrite");
+        const store = transaction.objectStore("books");
+        const addRequest = store.add(bookObj);
+
+        addRequest.onsuccess = function() {
             bookForm.reset();
             toggleInputFields();
-            displayBooks();
-        } catch (error) {
-            alert("ফাইলটি অতিরিক্ত বড় হওয়ার কারণে সেভ করা যাচ্ছে না! দয়া করে ড্রাইভ লিংক অপশন ব্যবহার করুন।");
-            books.pop();
-        }
+            loadBooks();
+        };
+
+        addRequest.onerror = function() {
+            alert("ফাইল স্টোরেজ ওভারফ্লো করেছে অথবা কোনো ত্রুটি ঘটেছে।");
+        };
     }
 
-    function deleteBook(index) {
+    function deleteBook(id) {
         if(confirm("আপনি কি এটি তালিকা থেকে বাদ দিতে চান?")) {
-            books.splice(index, 1);
-            localStorage.setItem('myBooks', JSON.stringify(books));
-            displayBooks();
+            const transaction = db.transaction(["books"], "readwrite");
+            const store = transaction.objectStore("books");
+            const deleteRequest = store.delete(id);
+
+            deleteRequest.onsuccess = function() {
+                loadBooks();
+            };
         }
     }
 
@@ -441,8 +501,6 @@
         displayBooks();
         alert("অ্যাডমিন লগআউট করা হয়েছে।");
     }
-
-    displayBooks();
 </script>
 
 </body>
