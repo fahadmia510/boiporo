@@ -11,6 +11,11 @@
             margin: 0;
             padding: 20px;
             color: #333;
+            /* টেক্সট সিলেক্ট বা কপি করা বন্ধ করার জন্য */
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
         .container {
             max-width: 800px;
@@ -111,17 +116,18 @@
             margin-bottom: 15px;
             font-weight: bold;
         }
-        .btn-download {
+        .btn-view {
             display: inline-block;
             background-color: #3498db;
             color: white;
-            text-decoration: none;
+            border: none;
             padding: 8px 15px;
             border-radius: 4px;
             font-size: 14px;
             width: 80%;
+            cursor: pointer;
         }
-        .btn-download:hover {
+        .btn-view:hover {
             background-color: #2980b9;
         }
         
@@ -147,6 +153,65 @@
         
         .admin-mode .btn-delete {
             display: block;
+        }
+
+        /* Read-Only Viewer Modal (পপআপ উইন্ডো) */
+        .viewer-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+        }
+        .viewer-content {
+            position: relative;
+            width: 90%;
+            height: 85%;
+            margin: 4% auto;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .viewer-header {
+            background: #2c3e50;
+            color: #fff;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .viewer-header h3 {
+            margin: 0;
+            font-size: 16px;
+        }
+        .btn-close-viewer {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .viewer-body {
+            width: 100%;
+            height: calc(100% - 45px);
+        }
+        .viewer-body iframe, .viewer-body embed {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .viewer-image {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+            margin: auto;
+            position: absolute;
+            top: 0; bottom: 0; left: 0; right: 0;
         }
     </style>
 </head>
@@ -197,6 +262,17 @@
     </div>
 </div>
 
+<div id="viewerModal" class="viewer-modal">
+    <div class="viewer-content">
+        <div class="viewer-header">
+            <h3 id="viewerTitle">Book Viewer</h3>
+            <button class="btn-close-viewer" onclick="closeBook()">Close</button>
+        </div>
+        <div class="viewer-body" id="viewerBody" oncontextmenu="return false;">
+            </div>
+    </div>
+</div>
+
 <script>
     const bookForm = document.getElementById('bookForm');
     const bookContainer = document.getElementById('bookContainer');
@@ -204,24 +280,36 @@
     const uploadType = document.getElementById('uploadType');
     const linkField = document.getElementById('linkField');
     const fileField = document.getElementById('fileField');
+    const viewerModal = document.getElementById('viewerModal');
+    const viewerBody = document.getElementById('viewerBody');
+    const viewerTitle = document.getElementById('viewerTitle');
 
     let books = JSON.parse(localStorage.getItem('myBooks')) || [];
     let isAdmin = false;
 
-    // ড্রপডাউন চেঞ্জ অনুযায়ী ইনপুট ফিল্ড পরিবর্তন করার ফাংশন
+    // সিকিউরিটি গার্ড: রাইট ক্লিক বন্ধ করা
+    document.addEventListener('contextmenu', event => event.preventDefault());
+
+    // সিকিউরিটি গার্ড: কিবোর্ডের শর্টকাট (Save, Print) বন্ধ করা
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && (e.key === 's' || e.key === 'p' || e.key === 'S' || e.key === 'P')) {
+            e.preventDefault();
+            alert("সংরক্ষণ বা প্রিন্ট করা নিষেধ।");
+        }
+    });
+
     function toggleInputFields() {
         if (uploadType.value === 'link') {
             linkField.style.display = 'block';
             fileField.style.display = 'none';
-            document.getElementById('fileInput').value = ''; // ক্লিয়ার ফাইল
+            document.getElementById('fileInput').value = '';
         } else {
             linkField.style.display = 'none';
             fileField.style.display = 'block';
-            document.getElementById('fileUrl').value = ''; // ক্লিয়ার লিংক
+            document.getElementById('fileUrl').value = '';
         }
     }
 
-    // বইয়ের লিস্ট দেখানোর ফাংশন
     function displayBooks() {
         bookContainer.innerHTML = ''; 
 
@@ -234,24 +322,52 @@
             const bookCard = document.createElement('div');
             bookCard.className = `book-card ${isAdmin ? 'admin-mode' : ''}`;
             
-            // ফাইলের টাইপ অনুযায়ী ব্যাজ নির্ধারণ
             const typeBadge = book.type === 'file' ? '📁 Local File' : '🔗 Web Link';
 
-            // ডাউনলোড লিংক তৈরি (ফাইল হলে ডিরেক্ট সোর্স ডাউনলোড হবে)
-            const downloadAttribute = book.type === 'file' ? `download="${book.title}"` : '';
-
+            // ডাউনলোড অপশন ছাড়া ভিউ বাটন তৈরি করা হয়েছে
             bookCard.innerHTML = `
                 <button class="btn-delete" onclick="deleteBook(${index})">X</button>
                 <h3>${book.title}</h3>
                 <p>লেখক: ${book.author}</p>
                 <span class="file-type-badge">${typeBadge}</span><br>
-                <a href="${book.url}" ${downloadAttribute} target="_blank" class="btn-download">View / Download</a>
+                <button onclick="openBook(${index})" class="btn-view">Read / View Book</button>
             `;
             bookContainer.appendChild(bookCard);
         });
     }
 
-    // হিডেন শর্টকাট ডিটেক্ট করা (Ctrl + Shift + A)
+    // সুরক্ষিতভাবে বই পড়ার পপআপ ওপেন করার ফাংশন
+    function openBook(index) {
+        const book = books[index];
+        viewerTitle.innerText = book.title + " - Read Only Mode";
+        viewerBody.innerHTML = '';
+
+        if(book.url.startsWith('data:image')) {
+            // যদি আপলোড করা ফাইল কোনো ছবি বা পেজ ইমেজ হয়
+            viewerBody.innerHTML = `<img src="${book.url}" class="viewer-image" oncontextmenu="return false;" draggable="false">`;
+        } else if(book.url.startsWith('data:application/pdf') || book.type === 'link') {
+            // পিডিএফ ফাইল বা সরাসরি ড্রাইভ লিংক হলে Toolbar বা ডাউনলোড অপশন হাইড করে লোড করার চেষ্টা করা
+            let secureUrl = book.url;
+            if(book.type === 'link' && secureUrl.includes('drive.google.com')) {
+                // গুগল ড্রাইভ হলে প্রিভিউ মোড ফোর্স করা
+                secureUrl = secureUrl.replace('/view', '/preview').replace('/edit', '/preview');
+            }
+            // #toolbar=0 দিয়ে ড্রাইভ বা পিডিএফের ডিফল্ট ডাউনলোড বাটন হাইড করার চেষ্টা করা হয়
+            viewerBody.innerHTML = `<iframe src="${secureUrl}#toolbar=0&navpanes=0&scrollbar=0" width="100%" height="100%" allow="autoplay"></iframe>`;
+        } else {
+            viewerBody.innerHTML = `<iframe src="${book.url}" width="100%" height="100%"></iframe>`;
+        }
+
+        viewerModal.style.display = 'block';
+    }
+
+    // ভিউয়ার ক্লোজ করার ফাংশন
+    function closeBook() {
+        viewerBody.innerHTML = '';
+        viewerModal.style.display = 'none';
+    }
+
+    // অ্যাডমিন শর্টকাট (Ctrl + Shift + A)
     window.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
             e.preventDefault();
@@ -272,7 +388,6 @@
         }
     });
 
-    // ফর্ম সাবমিট এবং ডেটা প্রসেসিং
     bookForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
@@ -283,7 +398,6 @@
         if (type === 'link') {
             const url = document.getElementById('fileUrl').value;
             if(!url) return alert("দয়া করে লিংকটি প্রদান করুন।");
-            
             saveBook({ title, author, type, url });
         } else {
             const fileInput = document.getElementById('fileInput');
@@ -292,22 +406,20 @@
             const file = fileInput.files[0];
             const reader = new FileReader();
             
-            // ফাইলটিকে Base64 টেক্সটে রূপান্তর করা
             reader.onload = function(event) {
-                const url = event.target.result; // এটিই ফাইলের ডেটা ইউআরএল
+                const url = event.target.result;
                 saveBook({ title, author, type, url });
             };
             reader.readAsDataURL(file);
         }
     });
 
-    // ডেটা সেভ করার কমন ফাংশন
     function saveBook(bookObj) {
         try {
             books.push(bookObj);
             localStorage.setItem('myBooks', JSON.stringify(books));
             bookForm.reset();
-            toggleInputFields(); // ফিল্ড রিসেট
+            toggleInputFields();
             displayBooks();
         } catch (error) {
             alert("ফাইলটি অতিরিক্ত বড় হওয়ার কারণে সেভ করা যাচ্ছে না! দয়া করে ড্রাইভ লিংক অপশন ব্যবহার করুন।");
@@ -315,7 +427,6 @@
         }
     }
 
-    // বই ডিলিট করা
     function deleteBook(index) {
         if(confirm("আপনি কি এটি তালিকা থেকে বাদ দিতে চান?")) {
             books.splice(index, 1);
@@ -324,7 +435,6 @@
         }
     }
 
-    // অ্যাডমিন লগআউট
     function logoutAdmin() {
         isAdmin = false;
         adminPanel.style.display = 'none';
